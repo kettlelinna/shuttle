@@ -23,21 +23,21 @@ import java.util.Objects;
  * App/Stage/Partition shuffle info obj
  */
 public class PartitionShuffleId {
-    private final StageShuffleId stageShuffleId;
+    private final StageShuffleInfo stageShuffleInfo;
     private final int partitionId;
 
-    public PartitionShuffleId(StageShuffleId stageShuffleId, int partitionId) {
-        this.stageShuffleId = stageShuffleId;
+    public PartitionShuffleId(StageShuffleInfo stageShuffleInfo, int partitionId) {
+        this.stageShuffleInfo = stageShuffleInfo;
         this.partitionId = partitionId;
     }
 
     public PartitionShuffleId(String appId, String appAttempt, int stageAttempt, int shuffleId, int partitionId) {
-        stageShuffleId = new StageShuffleId(appId, appAttempt, stageAttempt, shuffleId);
+        stageShuffleInfo = new StageShuffleInfo(appId, appAttempt, stageAttempt, shuffleId);
         this.partitionId = partitionId;
     }
 
-    public StageShuffleId getStageShuffleId() {
-        return stageShuffleId;
+    public StageShuffleInfo getStageShuffleInfo() {
+        return stageShuffleInfo;
     }
 
     public int getPartitionId() {
@@ -50,17 +50,17 @@ public class PartitionShuffleId {
         if (o == null || getClass() != o.getClass()) return false;
         PartitionShuffleId that = (PartitionShuffleId) o;
         return partitionId == that.partitionId &&
-                Objects.equals(stageShuffleId, that.stageShuffleId);
+                Objects.equals(stageShuffleInfo, that.stageShuffleInfo);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(stageShuffleId, partitionId);
+        return Objects.hash(stageShuffleInfo, partitionId);
     }
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder("PartitionShuffleId{ stageShuffleId=").append(stageShuffleId.toString())
+        StringBuilder sb = new StringBuilder("PartitionShuffleId{ stageShuffleInfo=").append(stageShuffleInfo.toString())
                 .append(", partitionId=").append(partitionId).append("}");
         return sb.toString();
     }

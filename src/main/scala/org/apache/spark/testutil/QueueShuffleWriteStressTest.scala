@@ -17,7 +17,7 @@
 package org.apache.spark.testutil
 
 import com.oppo.shuttle.rss.clients.NettyClient
-import com.oppo.shuttle.rss.common.{PartitionShuffleId, StageShuffleId}
+import com.oppo.shuttle.rss.common.{PartitionShuffleId, StageShuffleInfo}
 import com.oppo.shuttle.rss.execution.{Ors2WorkerPartitionExecutor, ShuffleIndex, ShufflePartitionUnsafeWriter}
 import com.oppo.shuttle.rss.metrics.Ors2MetricsConstants
 import com.oppo.shuttle.rss.storage.ShuffleFileStorage
@@ -43,7 +43,7 @@ class QueueShuffleWriteStressTest(val dir: String, val blockSize: String, val to
 
   val appId: String = NettyClient.requestId()
 
-  val appShuffleId = new StageShuffleId(appId, "0", 0, 0)
+  val appShuffleId = new StageShuffleInfo(appId, "0", 0, 0)
 
   val shufflePartitionId = new PartitionShuffleId(appShuffleId, 0)
 

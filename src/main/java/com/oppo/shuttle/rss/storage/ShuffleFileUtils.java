@@ -17,7 +17,7 @@
 
 package com.oppo.shuttle.rss.storage;
 
-import com.oppo.shuttle.rss.common.StageShuffleId;
+import com.oppo.shuttle.rss.common.StageShuffleInfo;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -30,7 +30,7 @@ public class ShuffleFileUtils {
         return String.format("shuffle_%s_%d_%d", hostName, shuffleId, partitionId);
     }
     
-    public static String getShuffleFilePath(String rootDir, StageShuffleId appShuffleId, int partitionId, String hostName) {
+    public static String getShuffleFilePath(String rootDir, StageShuffleInfo appShuffleId, int partitionId, String hostName) {
         String fileName = getShuffleFileName(
                 appShuffleId.getShuffleId(), partitionId, hostName);
 
@@ -44,12 +44,12 @@ public class ShuffleFileUtils {
         return path;
     }
 
-    public static Path getStageCompleteSignPath(String rootDir, StageShuffleId stageShuffleId) {
+    public static Path getStageCompleteSignPath(String rootDir, StageShuffleInfo stageShuffleInfo) {
         Path path = Paths.get(
-            getAppShuffleDir(rootDir, stageShuffleId.getAppId()),
-                stageShuffleId.getAppAttempt(),
-            String.valueOf(stageShuffleId.getShuffleId()),
-            String.valueOf(stageShuffleId.getStageAttempt()), "_SUCCEED");
+            getAppShuffleDir(rootDir, stageShuffleInfo.getAppId()),
+                stageShuffleInfo.getAppAttempt(),
+            String.valueOf(stageShuffleInfo.getShuffleId()),
+            String.valueOf(stageShuffleInfo.getStageAttempt()), "_SUCCEED");
         return path;
     }
 
@@ -64,12 +64,12 @@ public class ShuffleFileUtils {
         return Paths.get(rootDir, appId).toString();
     }
 
-    public static String getShuffleFileDir(String rootDir, StageShuffleId stageShuffleId, int partitionId) {
+    public static String getShuffleFileDir(String rootDir, StageShuffleInfo stageShuffleInfo, int partitionId) {
         String path = Paths.get(
-                getAppShuffleDir(rootDir, stageShuffleId.getAppId()),
-                stageShuffleId.getAppAttempt(),
-                String.valueOf(stageShuffleId.getShuffleId()),
-                String.valueOf(stageShuffleId.getStageAttempt()),
+                getAppShuffleDir(rootDir, stageShuffleInfo.getAppId()),
+                stageShuffleInfo.getAppAttempt(),
+                String.valueOf(stageShuffleInfo.getShuffleId()),
+                String.valueOf(stageShuffleInfo.getStageAttempt()),
                 String.valueOf(partitionId)).toString();
         return path;
     }

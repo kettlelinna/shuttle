@@ -52,7 +52,7 @@ public class Ors2ServerSwitchGroup {
             availableList.remove(server);
             blackSet.add(server);
             logger.warn("Remove unavailable server {}", server);
-            if (availableList.size() == 0) {
+            if (availableList.isEmpty()) {
                 logger.warn("If there is no server available, add all the blacklisted servers to the available list.");
                 availableList.addAll(blackSet);
                 blackSet.clear();

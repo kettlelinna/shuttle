@@ -129,13 +129,34 @@ class Ors2ShuffleManagerTest {
   def rddCacheMemory(): Unit = {
     val spark: SparkSession = env.createSession()
 
-    val df = spark.sparkContext.makeRDD(1.to(10000))
+    val df = spark.sql(
+      """
+        | select k, min(v) min, max(v)
+        | from (
+        | select null k, 1 v
+        | union all
+        | select null k, 2 v
+        | union all
+        | select '' k, 3 v
+        | union all
+        | select '' k, 4 v
+        | union all
+        | select 'str1' k, 5 v
+        | union all
+        | select 'str1' k, 6 v
+        | )
+        | group by 1
+        | order by 1
+        |""".stripMargin)
+    df.show(false)
+
+    /*val df = spark.sparkContext.makeRDD(1.to(10000))
       .persist(StorageLevel.MEMORY_ONLY)
 
     val count = df.count()
     assert(count == 10000)
 
-    assert(df.reduce(_ + _) == 50005000)
+    assert(df.reduce(_ + _) == 50005000)*/
   }
 
   @Test

@@ -61,7 +61,7 @@ public class NettyClientTest {
         ArrayList<Ors2ServerGroup> groups = new ArrayList<>();
         groups.add(ors2ServerGroup);
         AppTaskInfo taskInfo = new AppTaskInfo("1", "0", 1, 1, 0, 1, 0, 0);
-        NettyClient nettyClient = new NettyClient(groups, conf, taskInfo, new Ors2ClientFactory(conf));
+        NettyClient nettyClient = new NettyClient(groups, conf, taskInfo, new Ors2ShuffleClientFactory(conf));
 
         List<byte[]> bytes = Collections.singletonList(new byte[]{1, 1, 1});
         String id1 = NettyClient.requestId();
@@ -78,7 +78,7 @@ public class NettyClientTest {
         nettyClient.send(0, ShufflePacket.create(build(id4),  createPackageRequest(id4), bytes));
         nettyClient.waitFinish();
 
-        nettyClient.getClientFactory().stop();
+        nettyClient.getShuffleClientFactory().stop();
     }
 
     public ShuffleMessage.BuildConnectionRequest.Builder build(String id) {

@@ -67,14 +67,23 @@ public class Ors2UnsafeShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
     private final SparkConf sparkConf;
     private final int initialSortBufferSize;
 
-    @Nullable private MapStatus mapStatus;
-    @Nullable private Ors2ShuffleExternalSorter sorter;
+    @Nullable
+    private MapStatus mapStatus;
+    @Nullable
+    private Ors2ShuffleExternalSorter sorter;
     private long peakMemoryUsedBytes = 0;
 
-    /** Subclass of ByteArrayOutputStream that exposes `buf` directly. */
+    /**
+     * Subclass of ByteArrayOutputStream that exposes `buf` directly.
+     */
     static final class MyByteArrayOutputStream extends ByteArrayOutputStream {
-        MyByteArrayOutputStream(int size) { super(size); }
-        public byte[] getBuf() { return buf; }
+        MyByteArrayOutputStream(int size) {
+            super(size);
+        }
+
+        public byte[] getBuf() {
+            return buf;
+        }
     }
 
     private MyByteArrayOutputStream serBuffer;
@@ -89,7 +98,6 @@ public class Ors2UnsafeShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
 
     public Ors2UnsafeShuffleWriter(
             Ors2BlockManager blockManager,
-            TaskMemoryManager memoryManager,
             ShuffleDependency<K, V, C> dep,
             TaskContext taskContext,
             SparkConf sparkConf) {
@@ -101,7 +109,7 @@ public class Ors2UnsafeShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
                             " reduce partitions");
         }
         this.blockManager = blockManager;
-        this.memoryManager = memoryManager;
+        this.memoryManager = taskContext.taskMemoryManager();
         this.shuffleDependency = dep;
         this.serializer = dep.serializer().newInstance();
         this.partitioner = dep.partitioner();
@@ -139,39 +147,36 @@ public class Ors2UnsafeShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
     }
 
     @Override
-    public void write( scala.collection.Iterator<Product2<K, V>> records ) throws IOException {
+    public void write(scala.collection.Iterator<Product2<K, V>> records) throws IOException {
         // Keep track of success so we know if we encountered an exception
         // We do this rather than a standard try/catch/re-throw to handle
         // generic throwables.
         boolean success = false;
         try {
             long start = System.currentTimeMillis();
-            executeSync( records );
-            logger.info( "Finish to insert record, cost {} ms", System.currentTimeMillis() - start);
+            executeSync(records);
+            logger.info("Finish to insert record, cost {} ms", System.currentTimeMillis() - start);
             closeAndWriteOutput();
             success = true;
-        }
-        finally {
-            if ( sorter != null ) {
+        } finally {
+            if (sorter != null) {
                 try {
                     sorter.cleanupResources();
-                }
-                catch ( Exception e ) {
+                } catch (Exception e) {
                     // Only throw this error if we won't be masking another error.
-                    if ( success ) {
+                    if (success) {
                         throw e;
-                    }
-                    else {
-                        logger.error( "In addition to a failure during writing, we failed during " + "cleanup.", e );
+                    } else {
+                        logger.error("In addition to a failure during writing, we failed during " + "cleanup.", e);
                     }
                 }
             }
         }
     }
 
-    private void executeSync( scala.collection.Iterator<Product2<K, V>> records ) throws IOException {
-        while ( records.hasNext() ) {
-            insertRecordIntoSorter( records.next() );
+    private void executeSync(scala.collection.Iterator<Product2<K, V>> records) throws IOException {
+        while (records.hasNext()) {
+            insertRecordIntoSorter(records.next());
         }
     }
 
@@ -190,7 +195,7 @@ public class Ors2UnsafeShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
 
     @VisibleForTesting
     void closeAndWriteOutput() {
-        assert(sorter != null);
+        assert (sorter != null);
         updatePeakMemoryUsed();
         serBuffer = null;
         serOutputStream = null;
@@ -200,7 +205,7 @@ public class Ors2UnsafeShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
 
     @VisibleForTesting
     void insertRecordIntoSorter(Product2<K, V> record) throws IOException {
-        assert(sorter != null);
+        assert (sorter != null);
         final K key = record._1();
         final int partitionId = partitioner.getPartition(key);
 
@@ -256,5 +261,10 @@ public class Ors2UnsafeShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
                 sorter.cleanupResources();
             }
         }
+    }
+
+    @Override
+    public long[] getPartitionLengths() {
+        return new long[0];
     }
 }

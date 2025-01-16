@@ -21,11 +21,16 @@ import com.oppo.shuttle.rss.server.master.WeightedRandomDispatcher
 import org.apache.curator.framework.{CuratorFramework, CuratorFrameworkFactory}
 import org.apache.curator.retry.ExponentialBackoffRetry
 import org.apache.curator.test.TestingServer
+import org.apache.log4j.Logger
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.testutil.{Ors2MiniCluster, Ors2ShuffleMaster}
 
 class Ors2ShuffleTestEnv(numServer: Int, zkConn: Option[String], serviceRegistryType: String) {
+  Logger.getLogger("org.apache.spark").setLevel(org.apache.log4j.Level.WARN)
+  Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
+  Logger.getLogger("org.apache.spark.shuffle").setLevel(org.apache.log4j.Level.WARN)
+
   @volatile private var isStart = false
 
   private var zkServer: TestingServer = _
@@ -95,6 +100,7 @@ class Ors2ShuffleTestEnv(numServer: Int, zkConn: Option[String], serviceRegistry
       .setAppName("rss-test")
       .set("spark.executor.memory", "1g")
       .set("spark.executor.cores", "1")
+      .set("spark.sql.adaptive.localShuffleReader.enabled", "false")
       .set("spark.shuffle.manager", "org.apache.spark.shuffle.Ors2ShuffleManager")
       .set(Ors2Config.serviceManagerType, serviceRegistryType)
       .set(Ors2Config.serviceRegistryZKServers, realZkConn)
@@ -110,6 +116,7 @@ class Ors2ShuffleTestEnv(numServer: Int, zkConn: Option[String], serviceRegistry
       .set(Ors2Config.ioRetryWait, 1L)
       .set(Ors2Config.partitionCountPerShuffleWorker, 2)
       .set("spark.shuffle.sort.bypassMergeThreshold", "1")
+      .set("spark.sql.shuffle.partitions", "7")
   }
 
 

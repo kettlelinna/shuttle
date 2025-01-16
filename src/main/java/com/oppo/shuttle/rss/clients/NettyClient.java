@@ -59,10 +59,10 @@ public class NettyClient {
 
     private final ResponseCallback callback;
 
-    private final Ors2ClientFactory clientFactory;
+    private final Ors2ShuffleClientFactory shuffleClientFactory;
 
-    public NettyClient(List<Ors2ServerGroup> groupList, SparkConf conf, AppTaskInfo taskInfo, Ors2ClientFactory clientFactory) {
-        netWorkTimeout = clientFactory.getNetWorkTimeout();
+    public NettyClient(List<Ors2ServerGroup> groupList, SparkConf conf, AppTaskInfo taskInfo, Ors2ShuffleClientFactory shuffleClientFactory) {
+        netWorkTimeout = shuffleClientFactory.getNetWorkTimeout();
         ioMaxRetry = Math.max((int) conf.get(Ors2Config.sendDataMaxRetries()), 1);
         retryBaseWaitTime = (long) conf.get(Ors2Config.retryBaseWaitTime());
         flowControlEnable = (boolean) conf.get(Ors2Config.flowControlEnable());
@@ -71,10 +71,10 @@ public class NettyClient {
         int workerRetryNumber = (int) conf.get(Ors2Config.workerRetryNumber());
         this.taskInfo = taskInfo;
         semaphore = new Semaphore((int) conf.get(Ors2Config.maxFlyingPackageNum()));
-        this.clientFactory = clientFactory;
+        this.shuffleClientFactory = shuffleClientFactory;
 
         logger.info("NettyClient create success. ioThreads = {} , netWorkTimeout = {} ms, ioMaxRetry = {} times, retryBaseWaitTime = {} ms, networkSlowTime = {} ms",
-                clientFactory.getIoThreads(), netWorkTimeout, ioMaxRetry, retryBaseWaitTime, networkSlowTime);
+                shuffleClientFactory.getIoThreads(), netWorkTimeout, ioMaxRetry, retryBaseWaitTime, networkSlowTime);
 
         this.serverGroup = new Ors2ServerSwitchGroup(groupList, taskInfo.getMapId(), workerRetryNumber, mapWriteDispersion);
 
@@ -89,7 +89,7 @@ public class NettyClient {
                 if (retry >= ioMaxRetry) {
                     String msg = String.format("write for task %s data send fail, retries exceeding the maximum limit of %s times",
                             taskInfo.getMapId(), ioMaxRetry);
-                    clientFactory.setException(new Ors2NetworkException(msg));
+                    shuffleClientFactory.setException(new Ors2NetworkException(msg));
                     sendFinish.incrementAndGet();
                     semaphore.release();
                     return true;
@@ -110,7 +110,7 @@ public class NettyClient {
                 logger.warn("write for task {} data send fail: {}, retry the {} time, wait {} mills, id {}",
                         taskInfo.getMapId(), e.getMessage(), retryRequest.getRetry(), wait, request.id());
 
-                clientFactory.schedule(retryRequest::writeBuild, wait, TimeUnit.MILLISECONDS);
+                shuffleClientFactory.schedule(retryRequest::writeBuild, wait, TimeUnit.MILLISECONDS);
             }
 
             @Override
@@ -130,17 +130,17 @@ public class NettyClient {
     }
 
     public ShuffleClient getBuildClient(Ors2WorkerDetail server) {
-        return clientFactory.getBuildClient(server);
+        return shuffleClientFactory.getBuildClient(server);
     }
 
     public ShuffleClient getDataClient(Ors2WorkerDetail server) {
-        return clientFactory.getDataClient(server);
+        return shuffleClientFactory.getDataClient(server);
     }
 
     public void send(int workerId, ShufflePacket packet) {
         try {
             while (!semaphore.tryAcquire(Constants.CLIENT_TOKEN_WAIT_MS, TimeUnit.MILLISECONDS)) {
-                clientFactory.checkNetworkException();
+                shuffleClientFactory.checkNetworkException();
                 logger.warn(String.format("The network request is blocked, " +
                         "and the idle token cannot be obtained for more than %s ms ", Constants.CLIENT_TOKEN_WAIT_MS));
             }
@@ -165,7 +165,7 @@ public class NettyClient {
         SleepWaitTimeout waitTimeout = new SleepWaitTimeout(netWorkTimeout);
         int waitNumber = 0;
         while (v != 0) {
-            clientFactory.checkNetworkException();
+            shuffleClientFactory.checkNetworkException();
             try {
                 long sleepTime = Math.min(Constants.POLL_WAIT_MS, ((++waitNumber / 5) + 1) * 50L);
                 waitTimeout.sleepAdd(sleepTime);
@@ -209,8 +209,8 @@ public class NettyClient {
                 tuple2._1, tuple2._2, request.getCallback());
     }
 
-    public Ors2ClientFactory getClientFactory() {
-        return clientFactory;
+    public Ors2ShuffleClientFactory getShuffleClientFactory() {
+        return shuffleClientFactory;
     }
 
     public Tuple2<ShuffleClient, ShuffleClient> getClient(int workerId, int retry, Optional<Ors2WorkerDetail> errorServer) {
@@ -234,7 +234,7 @@ public class NettyClient {
         }
 
         if (lastException != null) {
-            clientFactory.setException(lastException);
+            shuffleClientFactory.setException(lastException);
             throw lastException;
         } else {
             return null;

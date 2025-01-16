@@ -17,7 +17,7 @@
 package com.oppo.shuttle.rss.handlers;
 
 import com.oppo.shuttle.rss.common.Constants;
-import com.oppo.shuttle.rss.common.StageShuffleId;
+import com.oppo.shuttle.rss.common.StageShuffleInfo;
 import com.oppo.shuttle.rss.exceptions.Ors2InvalidDataException;
 import com.oppo.shuttle.rss.execution.BuildConnectionExecutor;
 import com.oppo.shuttle.rss.execution.ShuffleDataExecutor;
@@ -72,7 +72,7 @@ public class ShuffleDataIncomingHandler extends ChannelInboundHandlerAdapter {
             appId = up.getAppId();
         }
 
-        StageShuffleId stageShuffleId = new StageShuffleId(appId, up.getAppAttempt(),
+        StageShuffleInfo stageShuffleInfo = new StageShuffleInfo(appId, up.getAppAttempt(),
                 up.getStageAttempt(),
                 up.getShuffleId());
 
@@ -86,7 +86,7 @@ public class ShuffleDataIncomingHandler extends ChannelInboundHandlerAdapter {
 
         try {
             executor.updateAppAliveness(appId);
-            executor.processUploadPackage(ctx, shuffleData, stageShuffleId, shuffleConnInfo);
+            executor.processUploadPackage(ctx, shuffleData, stageShuffleInfo, shuffleConnInfo);
             HandlerUtil.writeResponseMsg(ctx, MessageConstants.RESPONSE_STATUS_OK,
                     uploadResponse, true, MessageConstants.MESSAGE_UploadPackageResponse);
 

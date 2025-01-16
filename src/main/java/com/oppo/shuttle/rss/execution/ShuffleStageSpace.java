@@ -19,7 +19,7 @@ package com.oppo.shuttle.rss.execution;
 import com.oppo.shuttle.rss.common.Constants;
 import com.oppo.shuttle.rss.common.PartitionShuffleId;
 import com.oppo.shuttle.rss.common.ShuffleStatus;
-import com.oppo.shuttle.rss.common.StageShuffleId;
+import com.oppo.shuttle.rss.common.StageShuffleInfo;
 import com.oppo.shuttle.rss.exceptions.Ors2Exception;
 import com.oppo.shuttle.rss.exceptions.Ors2InvalidDataException;
 import com.oppo.shuttle.rss.exceptions.Ors2InvalidDirException;
@@ -42,7 +42,7 @@ import static com.oppo.shuttle.rss.common.ShuffleStatus.*;
 public class ShuffleStageSpace {
   private static final Logger logger = LoggerFactory.getLogger(ShuffleStageSpace.class);
 
-  private final StageShuffleId stageShuffleId;
+  private final StageShuffleInfo stageShuffleInfo;
   private final int fileStartIndex;
 
   /**
@@ -86,12 +86,12 @@ public class ShuffleStageSpace {
           Ors2AbstractExecutorService<Runnable> executor,
           ShuffleStorage storage,
           String serverId,
-          StageShuffleId stageShuffleId,
+          StageShuffleInfo stageShuffleInfo,
           int fileStartIndex,
           boolean checkDataInShuffleWorker) {
     this.partitionExecutor = executor;
     this.storage = storage;
-    this.stageShuffleId = stageShuffleId;
+    this.stageShuffleInfo = stageShuffleInfo;
     this.rootDir = storage.getRootDir();
     this.serverId = serverId;
     this.fileStartIndex = fileStartIndex;
@@ -100,9 +100,9 @@ public class ShuffleStageSpace {
       this.mapChecksum  = new ConcurrentHashMap<>();
       this.mapDataSize  = new ConcurrentHashMap<>();
     }
-    stageFinalizedPath = ShuffleFileUtils.getStageCompleteSignPath(rootDir, stageShuffleId).toString();
+    stageFinalizedPath = ShuffleFileUtils.getStageCompleteSignPath(rootDir, stageShuffleInfo).toString();
     appCompletePath = ShuffleFileUtils
-            .getAppCompleteSignPath(rootDir, stageShuffleId.getAppId(), stageShuffleId.getAppAttempt()).toString();
+            .getAppCompleteSignPath(rootDir, stageShuffleInfo.getAppId(), stageShuffleInfo.getAppAttempt()).toString();
   }
 
   public synchronized void addCheckSum(int mapId, long attemptId, ShuffleMessage.UploadPackageRequest.CheckSums checkSums) {
@@ -118,13 +118,13 @@ public class ShuffleStageSpace {
           if (storeChecksum != checkSum) {
             logger.warn("Store data checksum not equal checksumMsg chesksum, shuffleId: {}" +
                             "store: {}, comming chesksum:{}, partitionId:{}, mapId: {}",
-                    this.stageShuffleId, storeChecksum, checkSum, partitionId, mapId);
+                    this.stageShuffleInfo, storeChecksum, checkSum, partitionId, mapId);
           }
 
           Map<Integer, Long> partitionDS = mapDataSize.computeIfAbsent(partitionId, key -> new ConcurrentHashMap<>());
           long dataSize = partitionDS.getOrDefault(mapId, 0L);
           logger.info("CheckDataSize: shuffleId: {}, partitionId: {}, mapId: {}, dataSize: {}",
-                  stageShuffleId, partitionId, mapId, dataSize);
+                  stageShuffleInfo, partitionId, mapId, dataSize);
         }
         Map<Integer, LinkedList<Checksum>> partitionChecksums = checksumBuffer.computeIfAbsent(attemptId,
                 key -> new HashMap<>(Constants.SHUFFLE_PARTITION_COUNT_DEFAULT));
@@ -141,7 +141,7 @@ public class ShuffleStageSpace {
 
       if (checksumBufferedCount >= Constants.SHUFFLE_STAGE_INDEX_COUNT_DUMP_THRESHOLD) {
         logger.info("SubmitChecksum shuffleId: {}, mapId: {}, checksumSize: {},",
-                stageShuffleId, mapId, checksumBufferedCount);
+                stageShuffleInfo, mapId, checksumBufferedCount);
         submitChecksum();
         checksumBufferedCount = 0;
       }
@@ -174,8 +174,8 @@ public class ShuffleStageSpace {
     logger.info("submit checksum, checksum size {}", checksumBufferedCount);
   }
 
-  public synchronized StageShuffleId getStageShuffleId() {
-    return stageShuffleId;
+  public synchronized StageShuffleInfo getStageShuffleInfo() {
+    return stageShuffleInfo;
   }
 
   public void dataComing(int partitionId, byte[] blockData, int mapId, long attemptId, int seqId) {
@@ -193,7 +193,7 @@ public class ShuffleStageSpace {
           partitionChecksum.put(mapId, checksum);
           partitionDataSize.put(mapId, dataSize);
           logger.info("compute checksum, shuffleId: {}, partition:{}, mapId:{}, dataSize:{}, checksum:{}",
-            stageShuffleId, partitionId, mapId, length, checksum);
+                  stageShuffleInfo, partitionId, mapId, length, checksum);
         }
 
         execute(partitionWriter,  () -> partitionWriter.writeData(blockData, mapId, attemptId, seqId));
@@ -219,11 +219,11 @@ public class ShuffleStageSpace {
     }
 
     PartitionShuffleId appShufflePartitionId = new PartitionShuffleId(
-            stageShuffleId, partition);
+            stageShuffleInfo, partition);
 
     return dataWriters.computeIfAbsent(partition, p -> {
       String path = ShuffleFileUtils.getShuffleFilePath(
-        rootDir, stageShuffleId, partition, serverId);
+        rootDir, stageShuffleInfo, partition, serverId);
       return new ShufflePartitionUnsafeWriter(appShufflePartitionId,
       path, fileStartIndex, storage);
     });
@@ -241,7 +241,7 @@ public class ShuffleStageSpace {
   }
 
   public void execute(ShufflePartitionUnsafeWriter writer, Runnable run) {
-     int executorId = ShuffleUtils.generateShuffleExecutorIndex(stageShuffleId.getAppId(), stageShuffleId.getShuffleId(),
+     int executorId = ShuffleUtils.generateShuffleExecutorIndex(stageShuffleInfo.getAppId(), stageShuffleInfo.getShuffleId(),
             writer.getPartitionId(), partitionExecutor.getPoolSize());
      partitionExecutor.execute(executorId, () -> {
        try {
@@ -301,7 +301,7 @@ public class ShuffleStageSpace {
   @Override
   public synchronized String toString() {
     StringBuilder sb = new StringBuilder();
-    sb.append(String.format("ExecutorShuffleStageState %s:", stageShuffleId.toString()));
+    sb.append(String.format("ExecutorShuffleStageState %s:", stageShuffleInfo.toString()));
     sb.append(String.format(", file start index: %s", fileStartIndex));
     sb.append(System.lineSeparator());
     sb.append("Writers:");

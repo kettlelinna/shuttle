@@ -16,7 +16,7 @@
 
 package org.apache.spark.shuffle
 
-import com.oppo.shuttle.rss.common.{Constants, PartitionShuffleId, StageShuffleId}
+import com.oppo.shuttle.rss.common.{Constants, PartitionShuffleId, StageShuffleInfo}
 import com.oppo.shuttle.rss.execution.{ShuffleIndex, ShufflePartitionUnsafeWriter}
 import com.oppo.shuttle.rss.storage.ShuffleFileStorage
 import org.testng.annotations.Test
@@ -31,7 +31,7 @@ class ShuffleDataFileTest {
     file.delete()
   }
 
-  val appShuffleId = new StageShuffleId("test", "0", 0, 0)
+  val appShuffleId = new StageShuffleInfo("test", "0", 0, 0)
 
   val shufflePartitionId = new PartitionShuffleId(appShuffleId, 0)
 

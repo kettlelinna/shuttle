@@ -17,7 +17,7 @@
 package org.apache.spark.shuffle.ors2
 
 import com.google.common.annotations.VisibleForTesting
-import com.oppo.shuttle.rss.common.{Ors2WorkerDetail, StageShuffleId}
+import com.oppo.shuttle.rss.common.{Ors2WorkerDetail, StageShuffleInfo}
 import com.oppo.shuttle.rss.exceptions.Ors2Exception
 import com.oppo.shuttle.rss.metadata.ServiceManager
 import com.oppo.shuttle.rss.storage.{ShuffleFileStorage, ShuffleFileUtils}
@@ -54,13 +54,8 @@ class Ors2SparkListener(
 
   val deleteShuffleDir: Boolean = SchedulerUtils.conf.get(Ors2Config.deleteShuffleDir)
 
-  def addShuffleServer(shuffleId: Int, serverHandle: Array[Ors2ShuffleServerHandle]): Unit = {
-    val servers: Array[Ors2WorkerDetail] = {
-      val mutableSet: mutable.Set[Ors2WorkerDetail] = mutable.Set()
-      serverHandle.foreach(_.ors2ServerGroup.getServers.asScala.foreach(mutableSet.add))
-      mutableSet.toArray
-    }
-    shuffleServerMap.put(shuffleId, servers)
+  def addShuffleServer(shuffleId: Int, shuffleWorkers: Array[Ors2WorkerDetail]): Unit = {
+    shuffleServerMap.put(shuffleId, shuffleWorkers)
   }
 
   override def onStageCompleted(stageCompleted: SparkListenerStageCompleted): Unit = {
@@ -77,7 +72,7 @@ class Ors2SparkListener(
 
     val filePath = ShuffleFileUtils.getStageCompleteSignPath(
       rootDir,
-      new StageShuffleId(appId, appAttemptId, stageAttempt, shuffleId))
+      new StageShuffleInfo(appId, appAttemptId, stageAttempt, shuffleId))
     val parentPath = filePath.getParent.toString
 
     // Create a new file on cfs to tell shuffle server this stage is completed.
@@ -104,7 +99,7 @@ class Ors2SparkListener(
     val filePath = ShuffleFileUtils
       .getStageCompleteSignPath(
         rootDir,
-        new StageShuffleId(appId, appAttemptId, stageAttempt, shuffleId))
+        new StageShuffleInfo(appId, appAttemptId, stageAttempt, shuffleId))
     try {
       if (storage.exists(filePath.toString)) {
         logInfo(s"ShuffleId $shuffleId is rerun, so we delete this sign path when stage submitted")
@@ -149,9 +144,8 @@ object Ors2SparkListener extends Logging {
   def registerListener(
     context: SparkContext,
     appId: String,
-    attemptId: String,
     shuffleId: Int,
-    ors2Servers: Array[Ors2ShuffleServerHandle],
+    shuffleWorkers: Array[Ors2WorkerDetail],
     timeoutMillSec: Int,
     clusterConf: Ors2ClusterConf,
     serviceManager: ServiceManager
@@ -159,13 +153,14 @@ object Ors2SparkListener extends Logging {
     if (instance == null) {
       this.synchronized {
         if (instance == null) {
-          instance = new Ors2SparkListener(appId, attemptId, timeoutMillSec, clusterConf, serviceManager)
+          val appAttemptId = context.applicationAttemptId.getOrElse("0")
+          instance = new Ors2SparkListener(appId, appAttemptId, timeoutMillSec, clusterConf, serviceManager)
           context.addSparkListener(instance)
           logInfo("Registered Ors2SparkListener.")
         }
       }
     }
-    instance.addShuffleServer(shuffleId, ors2Servers)
+    instance.addShuffleServer(shuffleId, shuffleWorkers)
   }
 
   @VisibleForTesting

@@ -17,8 +17,8 @@
 package org.apache.spark.shuffle
 
 import com.oppo.shuttle.rss.BuildVersion
-import com.oppo.shuttle.rss.clients.Ors2ClientFactory
-import com.oppo.shuttle.rss.common.{AppTaskInfo, Constants, Ors2ServerGroup, Ors2WorkerDetail, StageShuffleId}
+import com.oppo.shuttle.rss.clients.Ors2ShuffleClientFactory
+import com.oppo.shuttle.rss.common.{AppTaskInfo, Constants, Ors2ServerGroup, Ors2WorkerDetail, StageShuffleInfo}
 import com.oppo.shuttle.rss.exceptions.{Ors2Exception, Ors2NoShuffleWorkersException}
 import com.oppo.shuttle.rss.metadata.{Ors2MasterServerManager, ServiceManager, ZkShuffleServiceManager}
 import com.oppo.shuttle.rss.util.ShuffleUtils
@@ -33,33 +33,34 @@ import org.apache.spark.sql.internal.SQLConf.{ADAPTIVE_EXECUTION_ENABLED, LOCAL_
 import scala.collection.JavaConverters._
 import scala.util.{Random => SRandom}
 
-class Ors2ShuffleManager(conf: SparkConf) extends ShuffleManager with Logging {
+
+class Ors2ShuffleManager(sparkConf: SparkConf) extends ShuffleManager with Logging {
   logInfo(s"Creating ShuffleManager instance: ${this.getClass.getSimpleName}, project version: ${BuildVersion.projectVersion}," +
     s" git commit revision: ${BuildVersion.gitCommitVersion}")
 
   private val SparkYarnQueueConfigKey = "spark.yarn.queue"
   private val SparkAppNameKey = "spark.app.name"
 
-  private val networkTimeoutMillis = conf.get(Ors2Config.networkTimeout).toInt
-  private val networkRetries = conf.get(Ors2Config.getClientMaxRetries)
-  private val retryInterval = conf.get(Ors2Config.ioRetryWait)
-  private val inputReadyQueryInterval = conf.get(Ors2Config.dataInputReadyQueryInterval)
-  private val inputReadyMaxWaitTime = conf.get(Ors2Config.shuffleReadWaitFinalizeTimeout)
+  private val networkTimeoutMillis = sparkConf.get(Ors2Config.networkTimeout).toInt
+  private val networkRetries = sparkConf.get(Ors2Config.getClientMaxRetries)
+  private val retryInterval = sparkConf.get(Ors2Config.ioRetryWait)
+  private val inputReadyQueryInterval = sparkConf.get(Ors2Config.dataInputReadyQueryInterval)
+  private val inputReadyMaxWaitTime = sparkConf.get(Ors2Config.shuffleReadWaitFinalizeTimeout)
 
-  private val dataCenter = conf.get(Ors2Config.dataCenter)
-  private val cluster = conf.get(Ors2Config.cluster)
-  private val useEpoll = conf.get(Ors2Config.useEpoll)
-  private var masterName = conf.get(Ors2Config.masterName)
-  private val isGetActiveMasterFromZk: Boolean = conf.get(Ors2Config.isGetActiveMasterFromZk)
-  private val dagId = conf.get(Ors2Config.dagId)
-  private val jobPriority = conf.get(Ors2Config.jobPriority)
-  private val taskId = conf.get(Ors2Config.taskId)
-  private val appName = conf.get(SparkAppNameKey, "")
-  val dfsDirPrefix: String = conf.get(Ors2Config.dfsDirPrefix)
+  private val dataCenter = sparkConf.get(Ors2Config.dataCenter)
+  private val cluster = sparkConf.get(Ors2Config.cluster)
+  private val useEpoll = sparkConf.get(Ors2Config.useEpoll)
+  private var masterName = sparkConf.get(Ors2Config.masterName)
+  private val isGetActiveMasterFromZk: Boolean = sparkConf.get(Ors2Config.isGetActiveMasterFromZk)
+  private val dagId = sparkConf.get(Ors2Config.dagId)
+  private val jobPriority = sparkConf.get(Ors2Config.jobPriority)
+  private val taskId = sparkConf.get(Ors2Config.taskId)
+  private val appName = sparkConf.get(SparkAppNameKey, "")
+  private val dfsDirPrefix: String = sparkConf.get(Ors2Config.dfsDirPrefix)
 
   private var serviceManager: ServiceManager = _
 
-  private val clientFactory: Ors2ClientFactory = new Ors2ClientFactory(conf)
+  private val shuffleClientFactory: Ors2ShuffleClientFactory = new Ors2ShuffleClientFactory(sparkConf)
 
   private def getSparkContext = {
     SparkContext.getActive.get
@@ -70,18 +71,22 @@ class Ors2ShuffleManager(conf: SparkConf) extends ShuffleManager with Logging {
    * Fetch Ors2 shuffle workers to use.
    * Return a ShuffleHandle to driver for (getWriter/getReader).
    */
-  override def registerShuffle[K, V, C](shuffleId: Int, dependency: ShuffleDependency[K, V, C]):
-  ShuffleHandle = {
+  override def registerShuffle[K, V, C](shuffleId: Int, dependency: ShuffleDependency[K, V, C]): ShuffleHandle = {
     logInfo(s"Use ShuffleManager: ${this.getClass.getSimpleName}")
 
-    if (conf.get(ADAPTIVE_EXECUTION_ENABLED) && conf.get(LOCAL_SHUFFLE_READER_ENABLED)) {
+    if (sparkConf.get(ADAPTIVE_EXECUTION_ENABLED) && sparkConf.get(LOCAL_SHUFFLE_READER_ENABLED)) {
       throw new Ors2Exception(s"shuttle rss does not support local file reading. " +
         s"Please set ${LOCAL_SHUFFLE_READER_ENABLED.key} to false")
     }
 
-    val blockSize = conf.get(Ors2Config.writeBlockSize)
-    val minBlockSize = conf.get(Ors2Config.minWriteBlockSize)
-    val maxBlockSize = conf.get(Ors2Config.maxWriteBlockSize)
+    if (sparkConf.get("spark.dynamicAllocation.enabled", "false").toBoolean) {
+      throw new Ors2Exception(s"shuttle rss does not support dynamicAllocation. " +
+        s"Please set spark.dynamicAllocation.enabled to false")
+    }
+
+    val blockSize = sparkConf.get(Ors2Config.writeBlockSize)
+    val minBlockSize = sparkConf.get(Ors2Config.minWriteBlockSize)
+    val maxBlockSize = sparkConf.get(Ors2Config.maxWriteBlockSize)
     if (blockSize < minBlockSize || blockSize > maxBlockSize) {
       throw new RuntimeException(s"config ${Ors2Config.writeBlockSize.key} must be between ${minBlockSize} and ${maxBlockSize}")
     }
@@ -89,18 +94,18 @@ class Ors2ShuffleManager(conf: SparkConf) extends ShuffleManager with Logging {
     val numPartitions = dependency.partitioner.numPartitions
     val sparkContext = getSparkContext
     val user = sparkContext.sparkUser
-    val queue = conf.get(SparkYarnQueueConfigKey, "")
+    val queue = sparkConf.get(SparkYarnQueueConfigKey, "")
 
-    val appId = conf.getAppId
-    val appAttempt = sparkContext.applicationAttemptId.getOrElse("0")
+    val appId = sparkConf.getAppId
+    val appAttemptId = sparkContext.applicationAttemptId.getOrElse("0")
 
-    val (clusterConf, shuffleWorkers) = getShuffleWorkers(numPartitions)
-    val (partitionMapToShuffleWorkers, ors2Servers) = distributeShuffleWorkersToPartition(shuffleId, numPartitions, shuffleWorkers)
+    val (clusterConf: Ors2ClusterConf, shuffleWorkers: Array[Ors2WorkerDetail]) = getShuffleWorkers(numPartitions)
+    val (partitionMapToShuffleWorkers: Map[Int, Int], ors2ServerHandles: Array[Ors2ShuffleServerHandle]) = distributeShuffleWorkersToPartition(shuffleId, numPartitions, shuffleWorkers)
 
     logInfo(s"partitionMapToShuffleWorkers to shuffle id $shuffleId size: ${partitionMapToShuffleWorkers.size}: $partitionMapToShuffleWorkers")
 
-    Ors2SparkListener.registerListener(sparkContext, conf.getAppId, appAttempt, shuffleId,
-      ors2Servers, networkTimeoutMillis, clusterConf, getOrCreateServiceManager)
+    // write flag file to dfs when stage is completed or app is completed, and delete the flag file when stage is rerun
+    Ors2SparkListener.registerListener(sparkContext, sparkConf.getAppId, shuffleId, shuffleWorkers, networkTimeoutMillis, clusterConf, getOrCreateServiceManager)
 
     val dependencyInfo = s"numPartitions: ${dependency.partitioner.numPartitions}, " +
       s"serializer: ${dependency.serializer.getClass.getSimpleName}, " +
@@ -110,18 +115,17 @@ class Ors2ShuffleManager(conf: SparkConf) extends ShuffleManager with Logging {
       s"keyClassName: ${dependency.keyClassName}, " +
       s"valueClassName: ${dependency.valueClassName}"
 
-    logInfo(s"RegisterShuffle: $appId, $appAttempt, $shuffleId, $dependencyInfo")
+    logInfo(s"RegisterShuffle: $appId, $appAttemptId, $shuffleId, $dependencyInfo")
 
     new Ors2ShuffleHandle(
-      shuffleId,
-      dependency.rdd.getNumPartitions,
-      appId,
-      appAttempt,
       user,
       queue,
+      appId,
+      appAttemptId,
       dependency,
+      shuffleId,
       partitionMapToShuffleWorkers,
-      ors2Servers,
+      ors2ServerHandles,
       clusterConf
     )
   }
@@ -130,40 +134,40 @@ class Ors2ShuffleManager(conf: SparkConf) extends ShuffleManager with Logging {
    * Called by Spark app executors, get ShuffleWriter from Spark driver via the ShuffleHandle.
    */
   override def getWriter[K, V](
-    handle: ShuffleHandle,
-    mapId: Long,
-    context: TaskContext,
-    metrics: ShuffleWriteMetricsReporter
-  ): ShuffleWriter[K, V] = {
-    handle match {
-      case ors2ShuffleHandle: Ors2ShuffleHandle[K@unchecked, V@unchecked, _] => {
-        val mapInfo = new AppTaskInfo(
-          conf.getAppId,
-          ors2ShuffleHandle.appAttempt,
-          ors2ShuffleHandle.partitionMapToShuffleWorkers.size,
-          conf.get(Ors2Config.partitionCountPerShuffleWorker),
-          ors2ShuffleHandle.shuffleId,
-          context.partitionId(),
-          context.attemptNumber(),
-          context.stageAttemptNumber()
+                                h: ShuffleHandle,
+                                mapId: Long,
+                                taskContext: TaskContext,
+                                metrics: ShuffleWriteMetricsReporter
+                              ): ShuffleWriter[K, V] = {
+    h match {
+      case shuffleHandle: Ors2ShuffleHandle[K@unchecked, V@unchecked, _] =>
+        val appTaskInfo = new AppTaskInfo(
+          sparkConf.getAppId,
+          shuffleHandle.appAttemptId,
+          shuffleHandle.partitionMapToShuffleWorkers.size,
+          sparkConf.get(Ors2Config.partitionCountPerShuffleWorker),
+          shuffleHandle.shuffleId,
+          taskContext.partitionId(),
+          taskContext.attemptNumber(),
+          taskContext.stageAttemptNumber()
         )
 
         val blockManager = Ors2BlockManager(
-          taskContext = context,
-          numPartitions = ors2ShuffleHandle.dependency.partitioner.numPartitions,
-          partitionMapToShuffleWorkers = ors2ShuffleHandle.partitionMapToShuffleWorkers,
-          appTaskInfo = mapInfo,
-          ors2Servers = ors2ShuffleHandle.getServerList,
+          taskContext = taskContext,
+          numPartitions = shuffleHandle.dependency.partitioner.numPartitions,
+          partitionMapToShuffleWorkers = shuffleHandle.partitionMapToShuffleWorkers,
+          appTaskInfo = appTaskInfo,
+          serverGroups = shuffleHandle.getAllServerGroups,
           Ors2ShuffleWriteMetrics(metrics),
-          conf.get(Ors2Config.writerBufferSpill).toInt,
-          clientFactory
+          sparkConf.get(Ors2Config.writerBufferSpill).toInt,
+          shuffleClientFactory
         )
 
-        var writeType = conf.get(Ors2Config.shuffleWriterType)
+        var writeType = sparkConf.get(Ors2Config.shuffleWriterType)
         if (writeType == Ors2Config.SHUFFLE_WRITER_AUTO) {
-          if (SortShuffleWriter.shouldBypassMergeSort(conf, ors2ShuffleHandle.dependency)) {
+          if (SortShuffleWriter.shouldBypassMergeSort(sparkConf, shuffleHandle.dependency)) {
             writeType = Ors2Config.SHUFFLE_WRITER_BYPASS
-          } else if (SortShuffleManager.canUseSerializedShuffle(ors2ShuffleHandle.dependency)) {
+          } else if (SortShuffleManager.canUseSerializedShuffle(shuffleHandle.dependency)) {
             writeType = Ors2Config.SHUFFLE_WRITER_UNSAFE
           } else {
             writeType = Ors2Config.SHUFFLE_WRITER_SORT
@@ -174,36 +178,32 @@ class Ors2ShuffleManager(conf: SparkConf) extends ShuffleManager with Logging {
           case Ors2Config.SHUFFLE_WRITER_BYPASS =>
             Ors2BypassShuffleWriter(
               blockManager,
-              context.taskMemoryManager(),
-              ors2ShuffleHandle.dependency,
-              context,
-              conf
+              shuffleHandle.dependency,
+              taskContext,
+              sparkConf
             )
           case Ors2Config.SHUFFLE_WRITER_UNSAFE =>
             new Ors2UnsafeShuffleWriter(
               blockManager,
-              context.taskMemoryManager(),
-              ors2ShuffleHandle.dependency,
-              context,
-              conf
+              shuffleHandle.dependency,
+              taskContext,
+              sparkConf
             )
           case Ors2Config.SHUFFLE_WRITER_SORT =>
             Ors2SortShuffleWriter(
               blockManager,
-              context.taskMemoryManager(),
-              ors2ShuffleHandle.dependency,
-              context,
-              conf
+              shuffleHandle.dependency,
+              taskContext,
+              sparkConf
             )
-          case _ => throw new RuntimeException(s"not support: $writeType")
+          case _ => throw new RuntimeException(s"not support ${Ors2Config.shuffleWriterType}: $writeType")
         }
 
-        val numPartitions = ors2ShuffleHandle.dependency.partitioner.numPartitions
+        val numPartitions = shuffleHandle.dependency.partitioner.numPartitions
         logInfo(s"shuttle rss writer use ${writer.getClass.getSimpleName}. " +
-          s"$handle, numPartitions: $numPartitions, mapId: $mapId, stageId: ${context.stageId()}, shuffleId: ${handle.shuffleId}")
+          s"$shuffleHandle, numPartitions: $numPartitions, mapId: $mapId, stageId: ${taskContext.stageId()}, shuffleId: ${shuffleHandle.shuffleId}")
         writer
-      }
-      case _ => throw new RuntimeException(s"not support: $handle")
+      case _ => throw new RuntimeException(s"not support handle: $h")
     }
   }
 
@@ -211,50 +211,49 @@ class Ors2ShuffleManager(conf: SparkConf) extends ShuffleManager with Logging {
    * Called by Spark executors, get ShuffleReader from Spark driver via the ShuffleHandle.
    */
   override def getReader[K, C](
-    handle: ShuffleHandle,
-    startMapIndex: Int,
-    endMapIndex: Int,
-    startPartition: Int,
-    endPartition: Int,
-    context: TaskContext,
-    metrics: ShuffleReadMetricsReporter): ShuffleReader[K, C] = {
+                                handle: ShuffleHandle,
+                                startMapIndex: Int,
+                                endMapIndex: Int,
+                                startPartition: Int,
+                                endPartition: Int,
+                                context: TaskContext,
+                                metrics: ShuffleReadMetricsReporter): ShuffleReader[K, C] = {
     getReaderForRange(handle, startMapIndex, endMapIndex, startPartition, endPartition, context, metrics)
   }
 
   def getReaderForRange[K, C](
-    handle: ShuffleHandle,
-    startMapIndex: Int,
-    endMapIndex: Int,
-    startPartition: Int,
-    endPartition: Int,
-    context: TaskContext,
-    metrics: ShuffleReadMetricsReporter
-  ): ShuffleReader[K, C] = {
-    logInfo(s"shuttle rss getReaderForRange: Use ShuffleManager: " +
-      s"${this.getClass.getSimpleName}, $handle, partitions: [$startPartition, $endPartition)")
+                               handle: ShuffleHandle,
+                               startMapIndex: Int,
+                               endMapIndex: Int,
+                               startPartition: Int,
+                               endPartition: Int,
+                               taskContext: TaskContext,
+                               metrics: ShuffleReadMetricsReporter
+                             ): ShuffleReader[K, C] = {
+    logInfo(s"shuttle rss getReaderForRange: Use ShuffleManager: ${this.getClass.getSimpleName}, $handle, partitions: [$startPartition, $endPartition)")
 
-    val Ors2ShuffleHandle = handle.asInstanceOf[Ors2ShuffleHandle[K, _, C]]
-    val stageShuffleId = new StageShuffleId(
-      conf.getAppId,
-      Ors2ShuffleHandle.appAttempt,
-      context.stageAttemptNumber(),
+    val ors2ShuffleHandle = handle.asInstanceOf[Ors2ShuffleHandle[K, _, C]]
+    val stageShuffleInfo = new StageShuffleInfo(
+      sparkConf.getAppId,
+      ors2ShuffleHandle.appAttemptId,
+      taskContext.stageAttemptNumber(),
       handle.shuffleId
     )
 
-    val serializer = Ors2ShuffleHandle.dependency.serializer
+    val serializer = ors2ShuffleHandle.dependency.serializer
 
     new Ors2ShuffleReader(
-      user = Ors2ShuffleHandle.user,
-      clusterConf = Ors2ShuffleHandle.clusterConf,
-      stageShuffleId = stageShuffleId,
+      user = ors2ShuffleHandle.user,
+      clusterConf = ors2ShuffleHandle.clusterConf,
+      stageShuffleInfo = stageShuffleInfo,
       startMapIndex = startMapIndex,
       endMapIndex = endMapIndex,
       startPartition = startPartition,
       endPartition = endPartition,
       serializer = serializer,
-      context = context,
-      conf = conf,
-      shuffleDependency = Ors2ShuffleHandle.dependency,
+      taskContext = taskContext,
+      sparkConf = sparkConf,
+      shuffleDependency = ors2ShuffleHandle.dependency,
       inputReadyCheckInterval = inputReadyQueryInterval,
       inputReadyWaitTime = inputReadyMaxWaitTime,
       shuffleMetrics = Ors2ShuffleReadMetrics(metrics)
@@ -274,7 +273,7 @@ class Ors2ShuffleManager(conf: SparkConf) extends ShuffleManager with Logging {
       if (serviceManager != null) {
         serviceManager.close()
       }
-      clientFactory.stop()
+      shuffleClientFactory.stop()
     } catch {
       case e: Throwable => log.error("Stop error", e)
     }
@@ -287,7 +286,7 @@ class Ors2ShuffleManager(conf: SparkConf) extends ShuffleManager with Logging {
 
     val zkManager = new ZkShuffleServiceManager(getZooKeeperServers, networkTimeoutMillis, networkRetries)
 
-    val serviceManagerType = conf.get(Ors2Config.serviceManagerType)
+    val serviceManagerType = sparkConf.get(Ors2Config.serviceManagerType)
     serviceManager = serviceManagerType match {
       case Constants.MANAGER_TYPE_ZK =>
         zkManager
@@ -301,10 +300,10 @@ class Ors2ShuffleManager(conf: SparkConf) extends ShuffleManager with Logging {
   }
 
   private def getZooKeeperServers: String = {
-    var serversValue = conf.get(Ors2Config.serviceRegistryZKServers)
+    var serversValue = sparkConf.get(Ors2Config.serviceRegistryZKServers)
     // Translation compatible with old configuration
     if (StringUtils.isEmpty(serversValue)) {
-      serversValue = conf.get("spark.shuffle.ors2.serviceRegistry.zookeeper.servers")
+      serversValue = sparkConf.get("spark.shuffle.ors2.serviceRegistry.zookeeper.servers")
     }
     serversValue
   }
@@ -328,9 +327,9 @@ class Ors2ShuffleManager(conf: SparkConf) extends ShuffleManager with Logging {
   }
 
   protected[spark] def distributeShuffleWorkersToPartition(
-    shuffleId: Int,
-    numPartitions: Int,
-    workers: Array[Ors2WorkerDetail]): (Map[Int, Int], Array[Ors2ShuffleServerHandle]) = {
+                                                            shuffleId: Int,
+                                                            numPartitions: Int,
+                                                            workers: Array[Ors2WorkerDetail]): (Map[Int, Int], Array[Ors2ShuffleServerHandle]) = {
     val workersPerGroup = SchedulerUtils.getWorkerGroupSize(shuffleId)
 
     val serverDetails = SRandom.shuffle(workers.toList)
@@ -371,9 +370,9 @@ class Ors2ShuffleManager(conf: SparkConf) extends ShuffleManager with Logging {
    */
   private def getShuffleWorkers(numPartitions: Int): (Ors2ClusterConf, Array[Ors2WorkerDetail]) = {
     logInfo(s"getShuffleWorkers numPartitions: $numPartitions")
-    val maxServerCount = conf.get(Ors2Config.maxRequestShuffleWorkerCount)
-    val minServerCount = conf.get(Ors2Config.minRequestShuffleWorkerCount)
-    val partitionCountPerShuffleWorker = conf.get(Ors2Config.partitionCountPerShuffleWorker)
+    val maxServerCount = sparkConf.get(Ors2Config.maxRequestShuffleWorkerCount)
+    val minServerCount = sparkConf.get(Ors2Config.minRequestShuffleWorkerCount)
+    val partitionCountPerShuffleWorker = sparkConf.get(Ors2Config.partitionCountPerShuffleWorker)
 
     var requestWorkerCount = Math.ceil(numPartitions / partitionCountPerShuffleWorker.toDouble).toInt
 
@@ -391,11 +390,12 @@ class Ors2ShuffleManager(conf: SparkConf) extends ShuffleManager with Logging {
       networkTimeoutMillis,
       dataCenter,
       cluster,
-      conf.getAppId,
+      sparkConf.getAppId,
       dagId,
       jobPriority,
       taskId,
-      appName)
+      appName
+    )
 
     if (configuredServerList.getServerDetailList.isEmpty) {
       throw new Ors2NoShuffleWorkersException("There is no reachable ors2 server")
@@ -404,8 +404,7 @@ class Ors2ShuffleManager(conf: SparkConf) extends ShuffleManager with Logging {
     val clusterConf = if (StringUtils.isEmpty(configuredServerList.getConf)) {
       Ors2ClusterConf(dfsDirPrefix, dataCenter, cluster, "")
     } else {
-      Ors2ClusterConf(configuredServerList.getRootDir, configuredServerList.getDataCenter,
-        configuredServerList.getCluster, configuredServerList.getConf)
+      Ors2ClusterConf(configuredServerList.getRootDir, configuredServerList.getDataCenter, configuredServerList.getCluster, configuredServerList.getConf)
     }
     log.info(s"use shuffle cluster: $clusterConf")
 

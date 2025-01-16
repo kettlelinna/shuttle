@@ -17,7 +17,8 @@
 package org.apache.spark.shuffle
 import com.oppo.shuttle.rss.exceptions.Ors2Exception
 import org.apache.spark.network.buffer.ManagedBuffer
-import org.apache.spark.storage.BlockId
+import org.apache.spark.network.shuffle.MergedBlockMeta
+import org.apache.spark.storage.{BlockId, ShuffleMergedBlockId}
 
 class Ors2ShuffleBlockResolver extends ShuffleBlockResolver {
   override def getBlockData(blockId: BlockId, dirs: Option[Array[String]]): ManagedBuffer = {
@@ -27,4 +28,8 @@ class Ors2ShuffleBlockResolver extends ShuffleBlockResolver {
   override def stop(): Unit = {
 
   }
+
+  override def getMergedBlockData(blockId: ShuffleMergedBlockId, dirs: Option[Array[String]]): Seq[ManagedBuffer] = ???
+
+  override def getMergedBlockMeta(blockId: ShuffleMergedBlockId, dirs: Option[Array[String]]): MergedBlockMeta = ???
 }

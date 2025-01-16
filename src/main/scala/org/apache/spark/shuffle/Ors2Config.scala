@@ -113,31 +113,31 @@ object Ors2Config {
       .intConf
       .createWithDefaultString("16")
 
-  val retryBaseWaitTime =
+  val retryBaseWaitTime: ConfigEntry[Long] =
     ConfigBuilder("spark.shuffle.rss.retry.baseWaitTime")
       .doc("Network error, flow control retry interval. Default 1s.")
       .timeConf(TimeUnit.MILLISECONDS)
       .createWithDefaultString("100ms")
 
-  val networkTimeout =
+  val networkTimeout: ConfigEntry[Long] =
     ConfigBuilder("spark.shuffle.rss.network.timeout")
       .doc("Network timeout time, including connection time, read and write time. Default 600s")
       .timeConf(TimeUnit.MILLISECONDS)
       .createWithDefaultString("300s")
 
-  val networkSlowTime =
+  val networkSlowTime: ConfigEntry[Long] =
     ConfigBuilder("spark.shuffle.rss.network.slowTime")
       .doc("Network operation slow log time. Default 10s")
       .timeConf(TimeUnit.MILLISECONDS)
       .createWithDefaultString("10s")
 
-  val ioThreads =
+  val ioThreads: ConfigEntry[Int] =
     ConfigBuilder("spark.shuffle.rss.network.ioThreads")
       .doc("Network IO threads. Default 2")
       .intConf
       .createWithDefault(2)
 
-  val numConnections = ConfigBuilder("spark.shuffle.rss.network.numConnections")
+  val numConnections: ConfigEntry[Int] = ConfigBuilder("spark.shuffle.rss.network.numConnections")
     .doc("Network connections. Default 1")
     .intConf
     .createWithDefault(1)
@@ -172,7 +172,7 @@ object Ors2Config {
       .intConf
       .createWithDefault(5)
 
-  val getClientWaitTime =
+  val getClientWaitTime: ConfigEntry[Long] =
     ConfigBuilder("spark.shuffle.rss.get.client.wait.time")
       .doc("When get idle client encounters error, wait this time and retry")
       .timeConf(TimeUnit.MILLISECONDS)
