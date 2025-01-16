@@ -25,19 +25,12 @@ import org.apache.spark.{ShuffleDependency, SparkConf, TaskContext}
 
 /**
  * Used when partition num under 200 or operator type not like reduceByKey
- *
- * @param blockManager
- * @param memoryManager
- * @param shuffleDependency
- * @param taskContext
- * @param sparkConf
  */
 case class Ors2BypassShuffleWriter[K, V, C](
-   blockManager: Ors2BlockManager,
-   memoryManager: TaskMemoryManager,
-   shuffleDependency: ShuffleDependency[K, V, C],
-   taskContext: TaskContext,
-   sparkConf: SparkConf)
+                                             blockManager: Ors2BlockManager,
+                                             shuffleDependency: ShuffleDependency[K, V, C],
+                                             taskContext: TaskContext,
+                                             sparkConf: SparkConf)
   extends ShuffleWriter[K, V] with Logging {
 
   private val numPartitions = shuffleDependency.partitioner.numPartitions
@@ -53,9 +46,7 @@ case class Ors2BypassShuffleWriter[K, V, C](
     }
   }
 
-  private val bufferManager = Ors2PartitionWriter[K, V, C](
-    blockManager, shuffleDependency, sparkConf
-   )
+  private val bufferManager = Ors2PartitionWriter[K, V, C](blockManager, shuffleDependency, sparkConf)
 
   override def write(records: Iterator[Product2[K, V]]): Unit = {
     while (records.hasNext) {
@@ -87,4 +78,6 @@ case class Ors2BypassShuffleWriter[K, V, C](
       None
     }
   }
+
+  override def getPartitionLengths(): Array[Long] = throw new UnsupportedOperationException("Not support push based shuffle")
 }

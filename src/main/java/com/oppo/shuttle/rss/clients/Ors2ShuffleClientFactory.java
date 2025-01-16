@@ -41,8 +41,8 @@ import java.util.Random;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class Ors2ClientFactory {
-    private static final Logger logger = LoggerFactory.getLogger(Ors2ClientFactory.class);
+public class Ors2ShuffleClientFactory {
+    private static final Logger logger = LoggerFactory.getLogger(Ors2ShuffleClientFactory.class);
 
     private final Class<? extends Channel> channelClass;
     private final EventLoopGroup workerGroup;
@@ -66,7 +66,7 @@ public class Ors2ClientFactory {
     public static final String TYPE_DATA = "data";
 
 
-    public Ors2ClientFactory(SparkConf conf) {
+    public Ors2ShuffleClientFactory(SparkConf conf) {
         ioThreads = (int) conf.get(Ors2Config.ioThreads());
         netWorkTimeout = (long) conf.get(Ors2Config.networkTimeout());
         networkSlowTime = (long) conf.get(Ors2Config.networkSlowTime());

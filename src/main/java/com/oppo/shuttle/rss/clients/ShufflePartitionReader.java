@@ -22,7 +22,7 @@ import com.carrotsearch.hppc.procedures.IntLongProcedure;
 import com.oppo.shuttle.rss.common.Constants;
 import com.oppo.shuttle.rss.common.ShuffleDataBlock;
 import com.oppo.shuttle.rss.common.SleepWaitTimeout;
-import com.oppo.shuttle.rss.common.StageShuffleId;
+import com.oppo.shuttle.rss.common.StageShuffleInfo;
 import com.oppo.shuttle.rss.exceptions.Ors2ChecksumException;
 import com.oppo.shuttle.rss.exceptions.Ors2Exception;
 import com.oppo.shuttle.rss.exceptions.Ors2FileException;
@@ -99,16 +99,16 @@ public class ShufflePartitionReader implements ShuffleReader {
 
   private final LongHashSet packageIndex;
 
-  public ShufflePartitionReader(Ors2ClusterConf clusterConf, StageShuffleId stageShuffleId,
+  public ShufflePartitionReader(Ors2ClusterConf clusterConf, StageShuffleInfo stageShuffleInfo,
                                 int partitionId, int startMapIndex, int endMapIndex,
                                 long inputReadyWaitTime, double mockErrorProbability, IntLongHashMap mapTaskLatestAttempt) {
     storage = new ShuffleFileStorage(clusterConf.rootDir(), clusterConf.fsConfBean());
     this.dataDirPrefix = storage.getRootDir();
-    this.shuffleId = stageShuffleId.getShuffleId();
+    this.shuffleId = stageShuffleInfo.getShuffleId();
     this.partitionId = partitionId;
     this.inputReadyWaitTime = inputReadyWaitTime;
     this.mapTaskLatestAttempt = mapTaskLatestAttempt;
-    this.partitionDir = ShuffleFileUtils.getShuffleFileDir(dataDirPrefix, stageShuffleId, partitionId);
+    this.partitionDir = ShuffleFileUtils.getShuffleFileDir(dataDirPrefix, stageShuffleInfo, partitionId);
     this.mapCheckSumFromIndex = new IntLongHashMap(512);
     this.readingDataCheckSum = new IntLongHashMap(512);
     this.mockErrorProbability = mockErrorProbability;

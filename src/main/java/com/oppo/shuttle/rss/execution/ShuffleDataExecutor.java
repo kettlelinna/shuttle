@@ -17,7 +17,7 @@
 package com.oppo.shuttle.rss.execution;
 
 import com.oppo.shuttle.rss.common.Constants;
-import com.oppo.shuttle.rss.common.StageShuffleId;
+import com.oppo.shuttle.rss.common.StageShuffleInfo;
 import com.oppo.shuttle.rss.exceptions.Ors2Exception;
 import com.oppo.shuttle.rss.messages.MessageConstants;
 import com.oppo.shuttle.rss.messages.ShuffleData;
@@ -55,7 +55,7 @@ public class ShuffleDataExecutor {
             = new ConcurrentHashMap<>();
     
     // This field stores spaces for different shuffle stages; Shuffle like space capsule
-    private final ConcurrentHashMap<StageShuffleId, ShuffleStageSpace> stageSpaces
+    private final ConcurrentHashMap<StageShuffleInfo, ShuffleStageSpace> stageSpaces
             = new ConcurrentHashMap<>();
 
     private final ShuffleStorage storage;
@@ -123,22 +123,22 @@ public class ShuffleDataExecutor {
             try {
                 if (stage.shouldFinalized()) {
                     stage.finalizeStage();
-                    logger.info("Finalize stage success: {}", stage.getStageShuffleId());
+                    logger.info("Finalize stage success: {}", stage.getStageShuffleInfo());
                 } else if (stage.shouldClear()) {
                     stage.clearDataFile();
-                    logger.info("Clear stage success: {}", stage.getStageShuffleId());
+                    logger.info("Clear stage success: {}", stage.getStageShuffleInfo());
                 } else if (stage.shouldDelete()) {
-                    stageSpaces.remove(stage.getStageShuffleId());
-                    logger.info("Delete stage success: {}", stage.getStageShuffleId());
+                    stageSpaces.remove(stage.getStageShuffleInfo());
+                    logger.info("Delete stage success: {}", stage.getStageShuffleInfo());
                 }
             } catch (Exception e) {
-                logger.error("Finalize or clear stage fail: {}", stage.getStageShuffleId(), e);
+                logger.error("Finalize or clear stage fail: {}", stage.getStageShuffleInfo(), e);
             }
         }
     }
 
     public void processUploadPackage(ChannelHandlerContext ctx, ShuffleData shuffleData,
-                                     StageShuffleId stageShuffleId, String connInfo) {
+                                     StageShuffleInfo stageShuffleInfo, String connInfo) {
         if (stopped) {
             throw new Ors2Exception("Shuffle executor has been shutdown");
         }
@@ -150,7 +150,7 @@ public class ShuffleDataExecutor {
             logger.warn("Invalid package, connectionInfo: {}", connInfo);
             return;
         }
-        dataComing(ctx, stageShuffleId, shuffleData, connInfo);
+        dataComing(ctx, stageShuffleInfo, shuffleData, connInfo);
     }
 
     public String getStorageDir() {
@@ -160,8 +160,8 @@ public class ShuffleDataExecutor {
     /**
      * process incoming shuffle block package data
      */
-    public void dataComing(ChannelHandlerContext ctx, StageShuffleId appShuffleId, ShuffleData shuffleData,
-      String connInfo) {
+    public void dataComing(ChannelHandlerContext ctx, StageShuffleInfo appShuffleId, ShuffleData shuffleData,
+                           String connInfo) {
         // TODO: add metrics info
         //logger.debug("dataComing: {}", uploadPackage.toString());
         ShuffleMessage.UploadPackageRequest uploadPackage = shuffleData.getUploadPackage();
@@ -267,11 +267,11 @@ public class ShuffleDataExecutor {
         }
     }
     
-    private ShuffleStageSpace getStageSpace(StageShuffleId stageShuffleId) {
-        return stageSpaces.computeIfAbsent(stageShuffleId, key-> {
+    private ShuffleStageSpace getStageSpace(StageShuffleInfo stageShuffleInfo) {
+        return stageSpaces.computeIfAbsent(stageShuffleInfo, key-> {
             ShuffleStageSpace stageSpace = new ShuffleStageSpace(partitionExecutor, storage,
-                    serverId, stageShuffleId, 0, checkDataInShuffleWorker);
-            logger.info("add runningStage: {}", stageShuffleId);
+                    serverId, stageShuffleInfo, 0, checkDataInShuffleWorker);
+            logger.info("add runningStage: {}", stageShuffleInfo);
             return stageSpace;
         });
     }
@@ -289,7 +289,7 @@ public class ShuffleDataExecutor {
 
         for (String appId : expiredApps) {
             appState.remove(appId);
-            List<StageShuffleId> expiredAppObjIds = stageSpaces.keySet()
+            List<StageShuffleInfo> expiredAppObjIds = stageSpaces.keySet()
                     .stream()
                     .filter(a->a.getAppId().equals(appId))
                     .collect(Collectors.toList());
@@ -304,7 +304,7 @@ public class ShuffleDataExecutor {
             }
 
             removedAppShuffleStageStates.forEach(stage -> {
-                logger.info("Removed expired stage: {}", stage.getStageShuffleId());
+                logger.info("Removed expired stage: {}", stage.getStageShuffleInfo());
                 stage.clearDataFile();
             });
             logger.info("Removed expired app obj from internal state: {}, number of app shuffle id: {}", appId,

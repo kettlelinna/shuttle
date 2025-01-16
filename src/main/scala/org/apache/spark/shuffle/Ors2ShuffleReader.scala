@@ -17,7 +17,7 @@
 
 package org.apache.spark.shuffle
 
-import com.oppo.shuttle.rss.common.StageShuffleId
+import com.oppo.shuttle.rss.common.StageShuffleInfo
 import org.apache.spark.executor.ShuffleReadMetrics
 import org.apache.spark.internal.Logging
 import org.apache.spark.serializer.Serializer
@@ -27,33 +27,33 @@ import org.apache.spark.util.collection.ExternalSorter
 import org.apache.spark.{InterruptibleIterator, ShuffleDependency, SparkConf, TaskContext}
 
 class Ors2ShuffleReader[K, C](
-  user: String,
-  clusterConf: Ors2ClusterConf,
-  stageShuffleId: StageShuffleId,
-  startMapIndex: Int,
-  endMapIndex: Int,
-  startPartition: Int,
-  endPartition: Int,
-  serializer: Serializer,
-  context: TaskContext,
-  conf: SparkConf,
-  shuffleDependency: ShuffleDependency[K, _, C],
-  inputReadyCheckInterval: Long,
-  inputReadyWaitTime: Long,
-  shuffleMetrics: ShuffleReadMetrics
-) extends ShuffleReader[K, C] with Logging {
+                               user: String,
+                               clusterConf: Ors2ClusterConf,
+                               stageShuffleInfo: StageShuffleInfo,
+                               startMapIndex: Int,
+                               endMapIndex: Int,
+                               startPartition: Int,
+                               endPartition: Int,
+                               serializer: Serializer,
+                               taskContext: TaskContext,
+                               sparkConf: SparkConf,
+                               shuffleDependency: ShuffleDependency[K, _, C],
+                               inputReadyCheckInterval: Long,
+                               inputReadyWaitTime: Long,
+                               shuffleMetrics: ShuffleReadMetrics
+                             ) extends ShuffleReader[K, C] with Logging {
   override def read(): Iterator[Product2[K, C]] = {
-    val readType = conf.get(Ors2Config.shuffleReadType)
-    logInfo(s"shuttle rss read started, readType: $readType, appShuffleId: $stageShuffleId, partitions: [$startPartition, $endPartition)")
+    val readType = sparkConf.get(Ors2Config.shuffleReadType)
+    logInfo(s"shuttle rss read started, readType: $readType, appShuffleId: $stageShuffleInfo, partitions: [$startPartition, $endPartition)")
 
     val shuffleDep = shuffleDependency
     logInfo(s"Shuffle aggregatorDefined? ${shuffleDep.aggregator.isDefined}, " +
       s"mapSideCombine? ${shuffleDep.mapSideCombine}, keyOrdering? ${shuffleDep.keyOrdering}")
 
-    val readerRecordIterator =  new ShuffleMultiReaderRecordIterator(
+    val readerRecordIterator = new ShuffleMultiReaderRecordIterator(
       user = user,
       clusterConf,
-      stageShuffleId,
+      stageShuffleInfo,
       startMapIndex = startMapIndex,
       endMapIndex = endMapIndex,
       startPartition = startPartition,
@@ -61,19 +61,19 @@ class Ors2ShuffleReader[K, C](
       serializer = serializer,
       inputReadyCheckInterval = inputReadyCheckInterval,
       inputReadyWaitTime = inputReadyWaitTime,
-      context = context,
-      conf = conf,
+      context = taskContext,
+      conf = sparkConf,
       shuffleReadMetrics = shuffleMetrics
     )
 
     val aggregatorIter: Iterator[Product2[K, C]] = if (shuffleDep.aggregator.isDefined) {
       if (shuffleDep.mapSideCombine) {
         // Reading combined records
-        shuffleDep.aggregator.get.combineCombinersByKey(readerRecordIterator, context)
+        shuffleDep.aggregator.get.combineCombinersByKey(readerRecordIterator, taskContext)
       } else {
         // Combine read records, note: make sure compatible with shuffleDep aggregator
         val keyValuesIterator = readerRecordIterator.asInstanceOf[Iterator[(K, Nothing)]]
-        shuffleDep.aggregator.get.combineValuesByKey(keyValuesIterator, context)
+        shuffleDep.aggregator.get.combineValuesByKey(keyValuesIterator, taskContext)
       }
     } else {
       require(!shuffleDep.mapSideCombine, "Map side enabled combine, but no aggregator is defined!")
@@ -84,17 +84,17 @@ class Ors2ShuffleReader[K, C](
     val resultIter = shuffleDep.keyOrdering match {
       case Some(keyOrd: Ordering[K]) =>
         // Create an ExternalSorter to sort the data
-        val sorter = new ExternalSorter[K, C, C](context, ordering = Some(keyOrd), serializer = shuffleDep.serializer)
-        logInfo(s"Inserting aggregated records to sorter: $stageShuffleId")
+        val sorter = new ExternalSorter[K, C, C](taskContext, ordering = Some(keyOrd), serializer = shuffleDep.serializer)
+        logInfo(s"Inserting aggregated records to sorter: $stageShuffleInfo")
         val startTime = System.currentTimeMillis()
         sorter.insertAll(aggregatorIter)
-        logInfo(s"Inserted aggregated records to sorter: $stageShuffleId, partition [$startPartition, $endPartition)," +
+        logInfo(s"Inserted aggregated records to sorter: $stageShuffleInfo, partition [$startPartition, $endPartition)," +
           s" millis: ${System.currentTimeMillis() - startTime}")
-        context.taskMetrics().incMemoryBytesSpilled(sorter.memoryBytesSpilled)
-        context.taskMetrics().incDiskBytesSpilled(sorter.diskBytesSpilled)
-        context.taskMetrics().incPeakExecutionMemory(sorter.peakMemoryUsedBytes)
+        taskContext.taskMetrics().incMemoryBytesSpilled(sorter.memoryBytesSpilled)
+        taskContext.taskMetrics().incDiskBytesSpilled(sorter.diskBytesSpilled)
+        taskContext.taskMetrics().incPeakExecutionMemory(sorter.peakMemoryUsedBytes)
         // Use completion callback to stop sorter if task was finished/cancelled.
-        context.addTaskCompletionListener[Unit](_ => {
+        taskContext.addTaskCompletionListener[Unit](_ => {
           sorter.stop()
         })
         CompletionIterator[Product2[K, C], Iterator[Product2[K, C]]](sorter.iterator, sorter.stop())
@@ -107,7 +107,7 @@ class Ors2ShuffleReader[K, C](
       case _ =>
         // Use another interruptible iterator here to support task cancellation as aggregator
         // or(and) sorter may have consumed previous interruptible iterator.
-        new InterruptibleIterator[Product2[K, C]](context, resultIter)
+        new InterruptibleIterator[Product2[K, C]](taskContext, resultIter)
     }
   }
 }

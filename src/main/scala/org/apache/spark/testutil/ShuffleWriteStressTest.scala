@@ -16,7 +16,7 @@
 
 package org.apache.spark.testutil
 
-import com.oppo.shuttle.rss.common.{PartitionShuffleId, StageShuffleId}
+import com.oppo.shuttle.rss.common.{PartitionShuffleId, StageShuffleInfo}
 import com.oppo.shuttle.rss.execution.{ShuffleIndex, ShufflePartitionUnsafeWriter}
 import com.oppo.shuttle.rss.metrics.Ors2MetricsConstants
 import com.oppo.shuttle.rss.storage.ShuffleFileStorage
@@ -39,7 +39,7 @@ class ShuffleWriteStressTest(val dir: String, val blockSize: String, val totalSi
 
   val totalBytes: Long = Utils.byteStringAsBytes(totalSize)
 
-  val appShuffleId = new StageShuffleId("test", "0", 0, 0)
+  val appShuffleId = new StageShuffleInfo("test", "0", 0, 0)
 
   val shufflePartitionId = new PartitionShuffleId(appShuffleId, 0)
 

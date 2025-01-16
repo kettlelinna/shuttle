@@ -16,8 +16,8 @@
 
 package org.apache.spark.testutil
 
-import com.oppo.shuttle.rss.clients.{NettyClient, Ors2ClientFactory}
-import com.oppo.shuttle.rss.common.{AppTaskInfo, Ors2ServerGroup, Ors2WorkerDetail, PartitionShuffleId, StageShuffleId}
+import com.oppo.shuttle.rss.clients.{NettyClient, Ors2ShuffleClientFactory}
+import com.oppo.shuttle.rss.common.{AppTaskInfo, Ors2ServerGroup, Ors2WorkerDetail, PartitionShuffleId, StageShuffleInfo}
 import com.oppo.shuttle.rss.exceptions.Ors2Exception
 import com.oppo.shuttle.rss.storage.fs.{FileSystem, Path}
 import org.apache.commons.lang3.StringUtils
@@ -42,7 +42,7 @@ class ShuffleWorkerStressTest(val server: String, val blockSize: String, val tot
 
   val appId: String = NettyClient.requestId()
 
-  val appShuffleId = new StageShuffleId(appId, "0", 0, 0)
+  val appShuffleId = new StageShuffleInfo(appId, "0", 0, 0)
 
   val shufflePartitionId = new PartitionShuffleId(appShuffleId, 0)
 
@@ -69,7 +69,7 @@ class ShuffleWorkerStressTest(val server: String, val blockSize: String, val tot
       serverGroup.toList,
       new ShuffleWriteMetrics,
       conf.get(Ors2Config.writerBufferSpill).toInt,
-      new Ors2ClientFactory(conf)
+      new Ors2ShuffleClientFactory(conf)
     )
 
     val start = System.currentTimeMillis()

@@ -16,7 +16,7 @@
 
 package org.apache.spark.shuffle
 
-import com.oppo.shuttle.rss.clients.{NettyClient, Ors2ClientFactory}
+import com.oppo.shuttle.rss.clients.{NettyClient, Ors2ShuffleClientFactory}
 import com.oppo.shuttle.rss.common.{AppTaskInfo, Ors2ServerGroup, Ors2ServerSwitchGroup, Ors2WorkerDetail}
 import org.apache.spark.SparkConf
 import org.testng.annotations.Test
@@ -96,7 +96,7 @@ class Ors2ServerSwitchTest {
 
     val appTaskInfo = new AppTaskInfo("1", "0", 1,
       20, 0, 1, 0, 0)
-    val factory = new Ors2ClientFactory(conf)
+    val factory = new Ors2ShuffleClientFactory(conf)
     val client = new NettyClient(env.getCluster.serverGroup(), conf, appTaskInfo, factory)
 
     // connect second worker

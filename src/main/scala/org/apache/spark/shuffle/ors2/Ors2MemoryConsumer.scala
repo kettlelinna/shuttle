@@ -18,12 +18,12 @@ package org.apache.spark.shuffle.ors2
 
 import com.oppo.shuttle.rss.exceptions.Ors2Exception
 import org.apache.spark.internal.Logging
-import org.apache.spark.memory.{MemoryConsumer, TaskMemoryManager}
+import org.apache.spark.memory.{MemoryConsumer, MemoryMode, TaskMemoryManager}
 import org.apache.spark.util.Utils
 
 import scala.collection.mutable
 
-class Ors2MemoryConsumer(taskMemoryManager: TaskMemoryManager) extends MemoryConsumer(taskMemoryManager) with Logging{
+class Ors2MemoryConsumer(taskMemoryManager: TaskMemoryManager) extends MemoryConsumer(taskMemoryManager, taskMemoryManager.getTungstenMemoryMode) with Logging{
   private val SAMPLE_GROWTH_RATE = 1.01
 
   private val map = mutable.Map[String, Int]()

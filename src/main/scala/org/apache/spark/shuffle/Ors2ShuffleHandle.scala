@@ -21,25 +21,23 @@ import org.apache.spark.ShuffleDependency
 import org.apache.spark.shuffle.ors2.Ors2ClusterConf
 
 private[spark] class Ors2ShuffleHandle[K, V, C](
-    shuffleId: Int,
-    val numMaps: Int,
-    val appId: String,
-    val appAttempt: String,
-    val user: String,
-    val queue: String,
-    val dependency: ShuffleDependency[K, V, C],
-    val partitionMapToShuffleWorkers: Map[Int, Int],
-    val ors2Servers: Array[Ors2ShuffleServerHandle],
-    val clusterConf: Ors2ClusterConf
-)
-  extends ShuffleHandle(shuffleId) {
+                                                 val user: String,
+                                                 val queue: String,
+                                                 val appId: String,
+                                                 val appAttemptId: String,
+                                                 val dependency: ShuffleDependency[K, V, C],
+                                                 override val shuffleId: Int,
+                                                 val partitionMapToShuffleWorkers: Map[Int, Int],
+                                                 val ors2ServerHandles: Array[Ors2ShuffleServerHandle],
+                                                 val clusterConf: Ors2ClusterConf
+                                               ) extends ShuffleHandle(shuffleId) {
 
-  def getServerList: List[Ors2ServerGroup] = {
-    ors2Servers.map(_.ors2ServerGroup).toList
+  def getAllServerGroups: List[Ors2ServerGroup] = {
+    ors2ServerHandles.map(_.ors2ServerGroup).toList
   }
 
   override def toString: String = s"Ors2ShuffleHandle " +
     s"(shuffleId $shuffleId, cluster: ${clusterConf.dataCenter}/${clusterConf.cluster}," +
-    s"rootDir: ${clusterConf.rootDir}, ors2Servers: ${ors2Servers.length} servers)"
+    s"rootDir: ${clusterConf.rootDir}, ors2ServerHandles: ${ors2ServerHandles.length} servers)"
 }
 

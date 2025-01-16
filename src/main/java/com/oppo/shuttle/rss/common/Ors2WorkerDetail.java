@@ -153,6 +153,4 @@ public class Ors2WorkerDetail implements java.io.Serializable {
             .setBuildConnPort(ors2WorkerDetail.getBuildConnPort())
             .build();
   }
-
-
 }

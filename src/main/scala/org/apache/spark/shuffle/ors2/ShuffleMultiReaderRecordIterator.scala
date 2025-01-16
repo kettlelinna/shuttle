@@ -27,7 +27,7 @@ import org.apache.spark.util.Utils
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue}
 import ShuffleMultiReaderRecordIterator._
 import com.oppo.shuttle.rss.clients.ShufflePartitionReader
-import com.oppo.shuttle.rss.common.StageShuffleId
+import com.oppo.shuttle.rss.common.StageShuffleInfo
 import com.oppo.shuttle.rss.exceptions.Ors2Exception
 
 import scala.collection.mutable
@@ -37,22 +37,22 @@ import scala.collection.mutable
  * To read partitions range: [startPartition, endPartition)
  */
 class ShuffleMultiReaderRecordIterator[K, C](
-  user: String,
-  clusterConf: Ors2ClusterConf,
-  stageShuffleId: StageShuffleId,
-  startMapIndex: Int,
-  endMapIndex: Int,
-  startPartition: Int,
-  endPartition: Int,
-  serializer: Serializer,
-  inputReadyCheckInterval: Long,
-  inputReadyWaitTime: Long,
-  context : TaskContext,
-  conf: SparkConf,
-  shuffleReadMetrics: ShuffleReadMetrics
+                                              user: String,
+                                              clusterConf: Ors2ClusterConf,
+                                              stageShuffleInfo: StageShuffleInfo,
+                                              startMapIndex: Int,
+                                              endMapIndex: Int,
+                                              startPartition: Int,
+                                              endPartition: Int,
+                                              serializer: Serializer,
+                                              inputReadyCheckInterval: Long,
+                                              inputReadyWaitTime: Long,
+                                              context : TaskContext,
+                                              conf: SparkConf,
+                                              shuffleReadMetrics: ShuffleReadMetrics
 ) extends Iterator[Product2[K, C]] with Logging {
 
-  val shuffleId: Int = stageShuffleId.getShuffleId
+  val shuffleId: Int = stageShuffleInfo.getShuffleId
 
   val taskId: Long = context.taskAttemptId()
 
@@ -90,7 +90,7 @@ class ShuffleMultiReaderRecordIterator[K, C](
 
     val partitionReader = new ShufflePartitionReader(
       clusterConf,
-      stageShuffleId,
+      stageShuffleInfo,
       partition,
       startMapIndex,
       endMapIndex,

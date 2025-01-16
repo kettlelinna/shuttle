@@ -23,11 +23,10 @@ import org.apache.spark.scheduler.MapStatus
 import org.apache.spark.shuffle.ors2.{Ors2BlockManager, Ors2ExternalSorter}
 
 case class Ors2SortShuffleWriter[K, V, C](
-   blockManager: Ors2BlockManager,
-   memoryManager: TaskMemoryManager,
-   dep: ShuffleDependency[K, V, C],
-   taskContext: TaskContext,
-   sparkConf: SparkConf)
+                                           blockManager: Ors2BlockManager,
+                                           dep: ShuffleDependency[K, V, C],
+                                           taskContext: TaskContext,
+                                           sparkConf: SparkConf)
   extends ShuffleWriter[K, V] with Logging {
 
   private var sorter: Ors2ExternalSorter[K, V, C] = _
@@ -72,4 +71,6 @@ case class Ors2SortShuffleWriter[K, V, C](
       }
     }
   }
+
+  override def getPartitionLengths(): Array[Long] = ???
 }

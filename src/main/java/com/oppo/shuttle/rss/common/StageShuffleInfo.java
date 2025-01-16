@@ -21,13 +21,13 @@ import java.util.Objects;
 /**
  * App/Stage shuffle info obj
  */
-public class StageShuffleId {
+public class StageShuffleInfo {
     private final String appId;
     private final String appAttempt;
     private final int stageAttempt;
     private final int shuffleId;
 
-    public StageShuffleId(String appId, String appAttempt, int stageAttempt, int shuffleId) {
+    public StageShuffleInfo(String appId, String appAttempt, int stageAttempt, int shuffleId) {
         this.appId = appId;
         this.appAttempt = appAttempt;
         this.stageAttempt = stageAttempt;
@@ -54,7 +54,7 @@ public class StageShuffleId {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        StageShuffleId that = (StageShuffleId) o;
+        StageShuffleInfo that = (StageShuffleInfo) o;
         return stageAttempt == that.stageAttempt &&
                 shuffleId == that.shuffleId &&
                 Objects.equals(appId, that.appId) &&
@@ -68,7 +68,7 @@ public class StageShuffleId {
 
     @Override
     public String toString() {
-        return "StageShuffleId{" +
+        return "StageShuffleInfo{" +
                 "appId='" + appId + '\'' +
                 ", appAttempt='" + appAttempt + '\'' +
                 ", stageAttempt=" + stageAttempt +

@@ -18,7 +18,7 @@ package org.apache.spark.shuffle.ors2
 
 import java.util
 import java.util.concurrent.TimeUnit
-import com.oppo.shuttle.rss.clients.{NettyClient, Ors2ClientFactory}
+import com.oppo.shuttle.rss.clients.{NettyClient, Ors2ShuffleClientFactory}
 import com.oppo.shuttle.rss.common.{AppTaskInfo, Constants, Ors2ServerGroup}
 import com.oppo.shuttle.rss.messages.ShuffleMessage.UploadPackageRequest.PartitionBlockData
 import com.oppo.shuttle.rss.messages.ShuffleMessage.{BuildConnectionRequest, UploadPackageRequest}
@@ -36,27 +36,27 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 case class Ors2BlockManager(
-  taskContext: TaskContext,
-  numPartitions: Int,
-  partitionMapToShuffleWorkers: Map[Int, Int],
-  appTaskInfo: AppTaskInfo,
-  ors2Servers: List[Ors2ServerGroup],
-  writeMetrics: ShuffleWriteMetrics,
-  maxBufferSize: Int,
-  clientFactory: Ors2ClientFactory
-) extends Logging {
+                             taskContext: TaskContext,
+                             numPartitions: Int,
+                             partitionMapToShuffleWorkers: Map[Int, Int],
+                             appTaskInfo: AppTaskInfo,
+                             serverGroups: List[Ors2ServerGroup],
+                             writeMetrics: ShuffleWriteMetrics,
+                             maxBufferSize: Int,
+                             clientFactory: Ors2ShuffleClientFactory
+                           ) extends Logging {
   private val conf = if (taskContext != null) SparkEnv.get.conf else new SparkConf()
   val writeBlockSize: Int = conf.get(Ors2Config.writeBlockSize).toInt
   val maxFlyingPackageNum: Int = conf.get(Ors2Config.maxFlyingPackageNum)
-  val writeMaxRequestSize: Long =  conf.get(Ors2Config.writerMaxRequestSize)
+  val writeMaxRequestSize: Long = conf.get(Ors2Config.writerMaxRequestSize)
   private var serInstance: SerializerInstance = _
 
-  private val consumer = if (taskContext != null){{
+  private val consumer = if (taskContext != null) {
     new Ors2MemoryConsumer(taskContext.taskMemoryManager())
-  }} else {
+  } else {
     null
   }
-  if (consumer != null)  {
+  if (consumer != null) {
     consumer.acquireMemory(Ors2Config.writerBufferSpill.key, maxBufferSize)
   }
 
@@ -74,7 +74,8 @@ case class Ors2BlockManager(
 
   private val checksums = Array.fill(numPartitions)(Constants.EMPTY_CHECKSUM_DEFAULT)
 
-  private val _partitionLengths: Array[Long]  = Array.fill(numPartitions)(0L)
+  private val _partitionLengths: Array[Long] = Array.fill(numPartitions)(0L)
+
   def partitionLengths: Array[Long] = _partitionLengths
 
   private var _spillCount = 0
@@ -101,7 +102,7 @@ case class Ors2BlockManager(
     _blockSeqId
   }
 
-  val nettyClient = new NettyClient(ors2Servers.asJava, conf, appTaskInfo, clientFactory)
+  val nettyClient = new NettyClient(serverGroups.asJava, conf, appTaskInfo, clientFactory)
 
   val workerToPartition = partitionMapToShuffleWorkers
     .groupBy(_._2) // group by worker id
@@ -144,9 +145,9 @@ case class Ors2BlockManager(
     nettyClient.send(workerId, packet)
   }
 
-  def createPartitionBlockData(data: mutable.Iterable[(Integer, Array[Byte])]):(mutable.Iterable[PartitionBlockData], util.ArrayList[Array[Byte]]) = {
+  def createPartitionBlockData(data: mutable.Iterable[(Integer, Array[Byte])]): (mutable.Iterable[PartitionBlockData], util.ArrayList[Array[Byte]]) = {
     val partitionBlocks = new util.ArrayList[Array[Byte]](data.size)
-    val blocksDesc = data.map {elm =>
+    val blocksDesc = data.map { elm =>
       partitionBlocks.add(elm._2)
       PartitionBlockData
         .newBuilder()
@@ -344,7 +345,7 @@ case class Ors2BlockManager(
     val blockManagerId = Ors2Util.mockMapBlockManagerId(
       appTaskInfo.getMapId,
       appTaskInfo.getTaskAttemptId,
-      ors2Servers)
+      serverGroups)
     Ors2Util.createMapStatus(blockManagerId, _partitionLengths, appTaskInfo)
   }
 }
